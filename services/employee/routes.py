@@ -1,5 +1,10 @@
 import re
 
+import json
+
+from uuid import uuid4
+from bson import ObjectId
+
 from datetime import datetime
 from datetime import timezone
 
@@ -9,6 +14,7 @@ from flask import jsonify
 from flask import request
 
 from services.common.auth import role_required
+
 
 
 employee_blueprint = Blueprint(
@@ -26,6 +32,48 @@ COMPARISON_OPERATORS = {
     "in": "$in",
     "nin": "$nin",
 }
+
+BUY_ORDER_FIELDS = (
+    "name",
+    "categories",
+    "buying_price",
+    "info",
+)
+
+SELL_ORDER_FIELDS = (
+    "id",
+    "selling_price",
+)
+
+def find_missing_fields(data, fields):
+    for field in fields:
+        if field not in data:
+            return field
+
+        value = data.get(field)
+        if value is None:
+            return field
+
+        if(isinstance(value, str) and len(value) == 0):
+            return field
+
+    return None
+
+def is_positive_number(value):
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and value > 0
+    )
+
+def save_order(order):
+    redis_client = current_app.extensions["redis_client"]
+
+    redis_client.hset(
+        "orders",
+        order["uuid"],
+        json.dumps(order)
+    )
 
 
 def get_json_body():
@@ -228,3 +276,107 @@ def search():
             for asset in assets
         ]
     ), 200
+
+@employee_blueprint.post("/create_buy_order")
+@role_required("employee")
+def create_buy_order():
+    data = get_json_body()
+
+    missing_field = find_missing_fields(data,BUY_ORDER_FIELDS)
+
+    if missing_field is not None:
+        return jsonify(
+            message=(
+                f"Field {missing_field} is missing."
+            )
+        ),400
+
+    name = data["name"]
+    categories = data["categories"]
+    buying_price = data["buying_price"]
+    info = data["info"]
+
+    if( not isinstance(name, str) or len(name) >256 ):
+        return jsonify(
+            message="Field name is missing."
+        ),400
+    if( not isinstance(categories, list) or len(categories) ==0 ):
+        return jsonify(
+            message="Categories list is empty."
+        ),400
+    if not all(isinstance(category, str) and 0<len(category) <=256 for category in categories):
+        return jsonify(
+            message="Categories list is empty."
+        ),400
+    if not is_positive_number(buying_price):
+        return jsonify(
+            message="Invalid buying price."
+        ),400
+    if not isinstance(info, dict):
+        return jsonify(
+            message="Field info is missing."
+        ),400
+
+    order = {
+        "uuid": str(uuid4()),
+        "order_type":"BUY",
+        "name":name,
+        "categories": categories,
+        "info": info,
+        "buying_price": buying_price,
+    }
+
+    save_order(order)
+
+    return "",200
+
+@employee_blueprint.post("/create_sell_order")
+@role_required("employee")
+def create_sell_order():
+    data = get_json_body()
+
+    missing_field = find_missing_fields(data,SELL_ORDER_FIELDS)
+
+    if missing_field is not None:
+        return jsonify(
+            message=(
+                f"Field {missing_field} is missing."
+            )
+        ),400
+
+    asset_id = data["id"]
+    selling_price = data["selling_price"]
+
+    if( not isinstance(asset_id, str) or not  ObjectId.is_valid(asset_id) ):
+        return jsonify(
+            message="Invalid id."
+        ),400
+
+    mongo_database = current_app.extensions[
+        "mongo_database"
+    ]
+    assets_collection = mongo_database[
+        "assets"
+    ]
+
+    assets = assets_collection.find_one({"_id": ObjectId(asset_id)})
+
+    if assets is None:
+        return jsonify(
+            message="Invalid id."
+        ),400
+    if not is_positive_number(selling_price):
+        return jsonify(
+            message="Invalid selling price."
+        ),400
+
+    order = {
+        "uuid": str(uuid4()),
+        "order_type":"SELL",
+        "id":asset_id,
+        "selling_price":selling_price,
+    }
+
+    save_order(order)
+
+    return "",200

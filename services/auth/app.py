@@ -9,6 +9,8 @@ from services.auth.routes import auth_blueprint
 #application factory pattern
 def create_app():
     app = Flask(__name__)
+    app.json.sort_keys = False
+
 
     app.config.from_object(Config)
 
