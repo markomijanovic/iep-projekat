@@ -21,6 +21,20 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+  ganache:
+    image: trufflesuite/ganache-cli:latest
+    command:
+      - "--accounts"
+      - "10"
+      - "--defaultBalanceEther"
+      - "1000"
+      - "--deterministic"
+      - "--networkId"
+      - "5777"
+      - "--chainId"
+      - "1337"
+    ports:
+      - "8545:8545"
 
 volumes:
   mongo-data:
