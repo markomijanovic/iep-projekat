@@ -13,10 +13,12 @@ def role_required(required_role):
             claims = get_jwt()
 
             if claims.get("role") != required_role:
-                return  jsonify(
-                    message="Forbidden",
-
-                ),403
+                return jsonify(
+                    msg=(
+                        "Missing "
+                        "Authorization Header"
+                    )
+                ), 401
 
             return function(*args, **kwargs)
         return wrapper

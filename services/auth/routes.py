@@ -15,7 +15,7 @@ auth_blueprint = Blueprint(
 )
 
 EMAIL_PATTERN = re.compile(
-    r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$"
 )
 
 REQUIRED_REGISTERED_FIELDS = [
