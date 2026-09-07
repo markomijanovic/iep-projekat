@@ -1,0 +1,12 @@
+.git
+.gitignore
+.idea
+.venv
+.env
+instance
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+grade_report.json
+report.html
