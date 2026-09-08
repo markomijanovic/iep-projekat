@@ -20,7 +20,7 @@ spec:
 
           containers:
             - name: blockchain-checker
-              image: iep-project:v2
+              image: iep-project:1.0.0
               imagePullPolicy: IfNotPresent
               command:
                 - python

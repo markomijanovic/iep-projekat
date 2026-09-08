@@ -223,13 +223,19 @@ CHECKER_RUN_ONCE=true python -m services.blockchain_checker.main
 Build the shared application image:
 
 ```bash
-docker build -t iep-project:v2 .
+docker build -t iep-project:1.0.0 .
 ```
 
 Create a local Secret manifest and replace every `CHANGE_ME` value. The resulting file is ignored by Git:
 
 ```bash
 cp kubernetes/00-secrets.example.yaml kubernetes/00-secrets.yaml
+```
+
+Windows PowerShell equivalent:
+
+```powershell
+Copy-Item kubernetes/00-secrets.example.yaml kubernetes/00-secrets.yaml
 ```
 
 Apply the manifests in order:

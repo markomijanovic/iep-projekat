@@ -35,7 +35,7 @@ spec:
 
       containers:
         - name: sql-init
-          image: iep-project:latest
+          image: iep-project:1.0.0
           imagePullPolicy: IfNotPresent
           command:
             - python

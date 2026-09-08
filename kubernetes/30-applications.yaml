@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: authentication
-          image: iep-project:latest
+          image: iep-project:1.0.0
           imagePullPolicy: IfNotPresent
           command:
             - python
@@ -73,7 +73,7 @@ spec:
     spec:
       containers:
         - name: employee
-          image: iep-project:latest
+          image: iep-project:1.0.0
           imagePullPolicy: IfNotPresent
           command:
             - python
@@ -133,7 +133,7 @@ spec:
     spec:
       containers:
         - name: director
-          image: iep-project:latest
+          image: iep-project:1.0.0
           imagePullPolicy: IfNotPresent
           command:
             - python
