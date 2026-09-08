@@ -56,6 +56,12 @@ def create_clients():
         )
     ]
 
+    mongo_database["assets"].create_index(
+        "order_uuid",
+        unique=True,
+        sparse=True,
+    )
+
     redis_client = Redis.from_url(
         os.environ["REDIS_URI"],
         decode_responses=True,
@@ -87,21 +93,22 @@ def apply_approved_order(
     current_time = datetime.now(timezone.utc)
 
     if order["order_type"] == "BUY":
-        existing_asset = (
-            assets_collection.find_one({
+        assets_collection.update_one(
+            {
                 "order_uuid": order_uuid,
-            })
+            },
+            {
+                "$setOnInsert": {
+                    "name": order["name"],
+                    "categories": order["categories"],
+                    "buying_price": order["buying_price"],
+                    "buying_date": current_time,
+                    "info": order["info"],
+                    "order_uuid": order_uuid,
+                }
+            },
+            upsert=True,
         )
-
-        if existing_asset is None:
-            assets_collection.insert_one({
-                "name": order["name"],
-                "categories" : order["categories"],
-                "buying_price" : order["buying_price"],
-                "buying_date" : current_time,
-                "info" : order["info"],
-                "order_uuid" : order_uuid,
-            })
 
         return
     if order["order_type"] == "SELL":
@@ -233,6 +240,13 @@ def main():
         )
     )
 
+    run_duration_seconds = float(
+        os.getenv(
+            "CHECKER_RUN_DURATION_SECONDS",
+            "0",
+        )
+    )
+
     if run_once:
         check_contract(
             mongo_database,
@@ -241,6 +255,14 @@ def main():
             contract_abi,
         )
         return
+
+    deadline = None
+
+    if run_duration_seconds > 0:
+        deadline = (
+            time.monotonic()
+            + run_duration_seconds
+        )
 
     while True:
         try:
@@ -256,7 +278,14 @@ def main():
                 flush=True,
             )
 
+        if (
+            deadline is not None
+            and time.monotonic() >= deadline
+        ):
+            return
+
         time.sleep(interval_seconds)
+
 
 if __name__ == "__main__":
     main()

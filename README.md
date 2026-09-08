@@ -80,11 +80,11 @@ flowchart LR
 |---|---|
 | API and application layer | Python 3.12, Flask |
 | Authentication | Flask-JWT-Extended, Werkzeug password hashing |
-| Relational persistence | Flask-SQLAlchemy, SQLite by default, configurable through `DATABASE_URL` |
+| Relational persistence | MySQL 8.4, Flask-SQLAlchemy, PyMySQL |
 | Portfolio persistence | MongoDB, PyMongo |
 | Workflow state | Redis |
 | Blockchain | Solidity, Web3.py, Ganache |
-| Development environment | Docker, Docker Compose |
+| Development environment | Docker, Docker Compose, Kubernetes |
 
 ## API overview
 
@@ -127,6 +127,7 @@ Authorization: Bearer <access-token>
 
 - Python 3.12+
 - Docker with Docker Compose
+- Kubernetes and `kubectl` for the complete deployment
 - Git
 
 ### 1. Clone the repository
@@ -152,7 +153,9 @@ Create a `.env` file in the project root:
 ```dotenv
 JWT_SECRET_KEY=replace-with-a-long-random-secret
 
-# DATABASE_URL is optional; SQLite defaults to instance/db.sqlite3
+MYSQL_ROOT_PASSWORD=change-this-mysql-password
+MYSQL_DATABASE=investment_fund
+DATABASE_URL=mysql+pymysql://root:change-this-mysql-password@localhost:3306/investment_fund
 
 MONGO_ROOT_USERNAME=admin
 MONGO_ROOT_PASSWORD=change-this-password
@@ -178,6 +181,7 @@ This starts:
 - MongoDB on `localhost:27017`
 - Redis on `localhost:6379`
 - Ganache on `localhost:8545`
+- MySQL on `localhost:3306`
 
 ### 5. Initialize the authentication database
 
@@ -186,7 +190,7 @@ mkdir -p instance
 python -m services.auth.init_db
 ```
 
-The initializer creates the schema and a local director fixture. Replace development fixtures before using the application outside a controlled local environment.
+The initializer creates the MySQL schema and the initial director account. Replace development fixtures before using the application outside a controlled local environment.
 
 ### 6. Run the application components
 
@@ -213,6 +217,58 @@ The checker runs continuously by default. To execute a single polling cycle:
 ```bash
 CHECKER_RUN_ONCE=true python -m services.blockchain_checker.main
 ```
+
+## Kubernetes deployment
+
+Build the shared application image:
+
+```bash
+docker build -t iep-project:v2 .
+```
+
+Create a local Secret manifest and replace every `CHANGE_ME` value. The resulting file is ignored by Git:
+
+```bash
+cp kubernetes/00-secrets.example.yaml kubernetes/00-secrets.yaml
+```
+
+Apply the manifests in order:
+
+```bash
+kubectl apply -f kubernetes/00-configuration.yaml
+kubectl apply -f kubernetes/00-secrets.yaml
+kubectl apply -f kubernetes/10-mysql.yaml
+kubectl rollout status deployment/mysql --timeout=180s
+kubectl apply -f kubernetes/11-sql-init-job.yaml
+kubectl wait --for=condition=complete job/sql-init --timeout=180s
+kubectl apply -f kubernetes/12-mongo-redis.yaml
+kubectl apply -f kubernetes/20-ganache.yaml
+kubectl apply -f kubernetes/30-applications.yaml
+kubectl apply -f kubernetes/40-blockchain-checker-cronjob.yaml
+```
+
+The SQL schema and initial director are created by the `sql-init` Kubernetes Job. The blockchain checker is a CronJob: it starts every minute and checks finalized contracts every two seconds during a bounded execution window. `concurrencyPolicy: Forbid` prevents scheduled executions from overlapping.
+
+Check the deployment:
+
+```bash
+kubectl get deployments
+kubectl get pods
+kubectl get jobs
+kubectl get cronjobs
+kubectl get services
+```
+
+If the local Kubernetes distribution does not expose NodePort on `127.0.0.1`, use port forwarding in four terminals:
+
+```bash
+kubectl port-forward service/authentication 15000:5000
+kubectl port-forward service/employee 15001:5001
+kubectl port-forward service/director 15002:5002
+kubectl port-forward service/ganache 18545:8545
+```
+
+The deployment uses one authentication replica, three employee replicas, one director replica, persistent storage for all three databases, a SQL initialization Job, and a contract-checking CronJob.
 
 ## Example authentication request
 
@@ -264,7 +320,8 @@ The test deploys contracts, verifies majority approval, checks late-voting prote
 │   ├── director/                    # Reports and voting decisions
 │   ├── blockchain_checker/          # Finalized-order processor
 │   └── common/                      # Shared authorization helpers
-├── compose.local.yaml               # MongoDB, Redis, and Ganache
+├── kubernetes/                       # Deployments, Services, Job, CronJob, PVCs
+├── compose.local.yaml               # MySQL, MongoDB, Redis, and Ganache
 ├── Dockerfile
 └── requirements.txt
 ```

@@ -5,3 +5,4 @@ __pycache__/
 instance/
 .idea/
 *.sqlite3
+kubernetes/00-secrets.yaml
